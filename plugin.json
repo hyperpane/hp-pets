@@ -1,0 +1,43 @@
+{
+  "manifest": 1,
+  "id": "pets",
+  "name": "Pets",
+  "version": "0.0.1",
+  "publisher": "hyperpane",
+  "description": "A little pixel cat that naps on the header of the window you're working in, and follows you to the next one.",
+  "icon": "icon.svg",
+  "category": "Look",
+  "engines": { "hyperpane": ">=0.2.0" },
+  "permissions": ["canvas"],
+  "client": { "main": "main.tsx" },
+  "contributes": {
+    "overlays": [{ "id": "pet", "title": "Pet" }],
+    "settings": [
+      {
+        "id": "coat",
+        "title": "Coat",
+        "description": "The cat's colors.",
+        "type": "enum",
+        "default": "ginger",
+        "options": [
+          { "value": "ginger", "label": "Ginger" },
+          { "value": "grey", "label": "Grey" },
+          { "value": "black", "label": "Black" },
+          { "value": "cream", "label": "Cream" }
+        ]
+      },
+      {
+        "id": "size",
+        "title": "Size",
+        "description": "How big the cat is next to the window (it grows and shrinks with the zoom).",
+        "type": "enum",
+        "default": "medium",
+        "options": [
+          { "value": "small", "label": "Small" },
+          { "value": "medium", "label": "Medium" },
+          { "value": "large", "label": "Large" }
+        ]
+      }
+    ]
+  }
+}

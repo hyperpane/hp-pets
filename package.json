@@ -1,0 +1,12 @@
+{
+  "name": "hyperpane-plugin-pets",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "The Pets plugin's dev tools: the type checker and the types it checks against. Never served or uploaded; build.sh installs them, with the SDK.",
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}
