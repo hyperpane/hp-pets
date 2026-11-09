@@ -39,5 +39,9 @@
         ]
       }
     ]
+  },
+  "signature": {
+    "key": "ed25519:5LgmP9NjLnpvz48igrFekSqi+4k6gzaO8sNwlsgNKFc=",
+    "sig": "EE2j0cm65wLMYyVyLU8jptDS3Z/lHNj8zTGwQ+glWd05/StqyzVEcWMJObh8S+5sjH2aFcm0sc/qXAOUo1XSDw=="
   }
 }
