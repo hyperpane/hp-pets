@@ -18,7 +18,7 @@ const BASE = [
   'ofeeffffffeeffo.................',
   'ofehffffffehffoooooooooooo......',
   'offwwwwnnwwwfffsfffsfffsffoo....',
-  'offwwwwwwwwwffffffffffffffffo...',
+  'offwwwwwwwwwffffffffffffffffo',
   '.ofwwwwwwwwfffsfffsfffsffffffo..',
   '.offfffffffffffffffffffffffffo..',
   '.osfffffffffffffffffffffffsffo..',
@@ -41,7 +41,7 @@ const TAILS: Record<'up' | 'swish', Patch[]> = {
   up: [
     [2, 26, '.oo..'],
     [3, 26, 'ofso.'],
-    [4, 25, 'ofo...'],
+    [4, 25, 'ofo'],
     [5, 25, 'oso'],
     [6, 25, 'ofo'],
     [7, 25, 'oso'],
