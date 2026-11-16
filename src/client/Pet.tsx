@@ -64,17 +64,9 @@ export function Pet({ host }: { host: Host }) {
   };
   return (
     <div style={{ position: 'absolute', left, top, width, height: HEIGHT * px }}>
-      <canvas
-        ref={canvas}
-        onPointerDown={pet}
-        style={{ width, height: HEIGHT * px, imageRendering: 'pixelated', cursor: 'pointer', display: 'block' }}
-      />
+      <canvas ref={canvas} onPointerDown={pet} style={{ width, height: HEIGHT * px, imageRendering: 'pixelated', cursor: 'pointer', display: 'block' }} />
       {hearts.map((id) => (
-        <span
-          key={id}
-          className="pet-heart"
-          style={{ left: FACE.x * px, top: FACE.y * px, fontSize: Math.max(10, 6 * px) }}
-        >
+        <span key={id} className="pet-heart" style={{ left: FACE.x * px, top: FACE.y * px, fontSize: Math.max(10, 6 * px) }}>
           ♥
         </span>
       ))}
