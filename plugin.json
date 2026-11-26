@@ -2,44 +2,102 @@
   "manifest": 1,
   "id": "pets",
   "name": "Pets",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "publisher": "hyperpane",
-  "description": "A little pixel cat that naps on the header of the window you're working in and follows you to the next one. Four coats, three sizes; click it for a heart.",
+  "description": "A little pixel pet (a cat, a fox, a pup or a bunny) that naps on the header of the window you're working in and leaps to the next one. It watches your pointer, purrs when you pet it, and dozes off when you leave it be.",
   "icon": "icon.svg",
   "category": "Look",
   "license": "MIT",
   "homepage": "https://github.com/hyperpane/hp-pets",
-  "engines": { "hyperpane": ">=0.2.0" },
-  "permissions": ["canvas"],
-  "client": { "main": "main.tsx" },
+  "engines": {
+    "hyperpane": ">=0.2.0"
+  },
+  "permissions": [
+    "canvas"
+  ],
+  "client": {
+    "main": "main.tsx"
+  },
   "contributes": {
-    "overlays": [{ "id": "pet", "title": "The cat on the active window" }],
+    "overlays": [
+      {
+        "id": "pet",
+        "title": "The pet on the active window"
+      }
+    ],
     "settings": [
+      {
+        "id": "pet",
+        "title": "Pet",
+        "description": "Which pet keeps you company.",
+        "group": "The pet",
+        "type": "enum",
+        "default": "cat",
+        "options": [
+          {
+            "value": "cat",
+            "label": "Cat"
+          },
+          {
+            "value": "fox",
+            "label": "Fox"
+          },
+          {
+            "value": "dog",
+            "label": "Pup"
+          },
+          {
+            "value": "bunny",
+            "label": "Bunny"
+          }
+        ]
+      },
       {
         "id": "coat",
         "title": "Coat",
-        "description": "The cat's colors: ginger, grey, black or cream.",
-        "group": "The cat",
+        "description": "Its colors: ginger, grey, black or cream. Each pet wears it its own way (a black fox is a silver fox, a cream one an arctic fox).",
+        "group": "The pet",
         "type": "enum",
         "default": "ginger",
         "options": [
-          { "value": "ginger", "label": "Ginger" },
-          { "value": "grey", "label": "Grey" },
-          { "value": "black", "label": "Black" },
-          { "value": "cream", "label": "Cream" }
+          {
+            "value": "ginger",
+            "label": "Ginger"
+          },
+          {
+            "value": "grey",
+            "label": "Grey"
+          },
+          {
+            "value": "black",
+            "label": "Black"
+          },
+          {
+            "value": "cream",
+            "label": "Cream"
+          }
         ]
       },
       {
         "id": "size",
         "title": "Size",
-        "description": "How big the cat is next to the window. It still grows and shrinks with the canvas's zoom, and hides on a window narrower than itself.",
-        "group": "The cat",
+        "description": "How big the pet is next to the window. It still grows and shrinks with the canvas's zoom, and hides on a window narrower than itself.",
+        "group": "The pet",
         "type": "enum",
         "default": "medium",
         "options": [
-          { "value": "small", "label": "Small" },
-          { "value": "medium", "label": "Medium" },
-          { "value": "large", "label": "Large" }
+          {
+            "value": "small",
+            "label": "Small"
+          },
+          {
+            "value": "medium",
+            "label": "Medium"
+          },
+          {
+            "value": "large",
+            "label": "Large"
+          }
         ]
       }
     ]

@@ -1,109 +1,297 @@
-// The pet overlay: the cat lies on the top edge of the active window's
-// header, in the middle, paws hanging over. It follows the focus from window
-// to window, pans and zooms with the canvas, swishes its tail, blinks, and
-// a click on it gets a heart.
+// The pet overlay: the pet lies on the top edge of the active window's
+// header, in the middle, front paws over the edge. When the focus moves to
+// another window it leaps there, facing the way it goes, and lands in a puff
+// of dust; it pans and zooms with the canvas and rides along when its window
+// moves. Its brain (brain.ts) says what it does, sprite.ts draws it.
+//
+// The drawing is done outside React: one loop places it and redraws its
+// canvas only when its pose changes, every frame while it's in the air and
+// a few times a second otherwise. React keeps the hearts and the z's.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import type { CanvasActive, CanvasView, Host } from '@hyperpane/sdk/client';
 import { useSetting } from '@hyperpane/sdk/client';
-import { COATS, EDGE, FACE, HEIGHT, WIDTH, draw, type Pose } from './cat.ts';
+import { Brain, key } from './brain.ts';
+import { EDGE, FACE, HEAD, HEIGHT, type Kind, WIDTH, draw, render } from './sprite.ts';
 
-/** Canvas units a cat pixel, by the Size setting. */
-const SIZES: Record<string, number> = { small: 1.5, medium: 2, large: 3 };
+/** Canvas units a pet pixel, by the Size setting. */
+const SIZES: Record<string, number> = { small: 1.25, medium: 1.75, large: 2.5 };
+const KINDS = new Set<Kind>(['cat', 'fox', 'dog', 'bunny']);
+
+type Point = { x: number; y: number };
+type Jump = { from: Point; start: number; duration: number; height: number };
+type Bit = { id: number; kind: 'heart' | 'z'; x: number; drift: number };
 
 export function Pet({ host }: { host: Host }) {
-  const [view, setView] = useState<CanvasView>(() => host.canvas.view);
-  const [active, setActive] = useState<CanvasActive | null>(() => host.canvas.active);
+  const [kindSetting] = useSetting<string>('pet');
   const [coat] = useSetting<string>('coat');
   const [size] = useSetting<string>('size');
-  const pose = usePose();
-  const [hearts, setHearts] = useState<number[]>([]);
+  const kind: Kind = KINDS.has(kindSetting as Kind) ? (kindSetting as Kind) : 'cat';
+  const [bits, setBits] = useState<Bit[]>([]);
+  const [shown, setShown] = useState(false);
+  const [mirror, setMirror] = useState(false);
+  const [px, setPx] = useState(1);
+  const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const live = useRef({ coat, size, kind });
+  live.current = { coat, size, kind };
+  const brain = useRef<Brain | null>(null);
+  if (!brain.current || brain.current.kind !== kind) brain.current = new Brain(kind, performance.now());
+  /** Petted: the loop takes it from here. */
+  const petted = useRef(false);
+  const hovered = useRef<boolean | null>(null);
 
   useEffect(() => {
-    const offView = host.on('view', setView);
-    const offActive = host.on('active', setActive);
+    let view: CanvasView = host.canvas.view;
+    let active: CanvasActive | null = host.canvas.active;
+    let pointer: Point | null = null;
+    /** Where it sits (the header's top middle), on the canvas. */
+    let at: Point | null = null;
+    let sitting: number | null = null;
+    let jump: Jump | null = null;
+    let facing = 1;
+    let drawn = '';
+    let place = '';
+    let areas = '';
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let frame = 0;
+    let nextZ = 0;
+    let bitId = 0;
+    const still = matchMedia('(prefers-reduced-motion: reduce)');
+
+    const spawn = (kind: Bit['kind']) => {
+      const id = ++bitId;
+      const bit: Bit = { id, kind, x: (Math.random() - 0.5) * 6, drift: kind === 'z' ? 1 : (Math.random() - 0.5) * 2 };
+      setBits((b) => [...b.slice(-5), bit]);
+      setTimeout(() => setBits((b) => b.filter((x) => x.id !== id)), kind === 'z' ? 2400 : 1300);
+    };
+
+    const tick = () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      frame = 0;
+      const now = performance.now();
+      const b = brain.current;
+      const { coat, size, kind } = live.current;
+      if (!b) return;
+      const unit = SIZES[size] ?? SIZES.medium;
+      const dpr = globalThis.devicePixelRatio || 1;
+      // Whole device pixels a pet pixel, so it stays crisp at any zoom.
+      const device = Math.max(1, Math.round(unit * view.zoom * dpr));
+      const scale = device / dpr;
+      const width = WIDTH * scale;
+
+      if (!active || active.width * view.zoom < width * 1.1) {
+        // Nowhere to sit: gone, and back from above next time.
+        at = null;
+        sitting = null;
+        jump = null;
+        setShown(false);
+        if (areas !== '') host.overlay.setHitAreas([]);
+        areas = '';
+        return;
+      }
+      const target = { x: active.x + active.width / 2, y: active.y };
+      if (active.window !== sitting) {
+        // Off to the new window: from where it was, or dropping in from
+        // above.
+        const from = at ?? { x: target.x, y: target.y - 70 };
+        const dx = target.x - from.x;
+        if (Math.abs(dx) > 4) facing = dx > 0 ? -1 : 1;
+        const far = Math.hypot(dx, target.y - from.y);
+        if (still.matches) {
+          jump = null;
+        } else {
+          const duration = at ? Math.min(750, 320 + far * 0.35) : 380;
+          // An arc, no higher than the room above it on the screen.
+          const room = (Math.min(from.y, target.y) * view.zoom + view.y - HEIGHT * scale - 8) / view.zoom;
+          const height = at ? Math.max(12, Math.min(160, 30 + far * 0.25, room)) : 0;
+          jump = { from, start: now, duration, height };
+          b.leap(now, now + duration);
+        }
+        sitting = active.window;
+      }
+
+      // Where it is now: on its window, or along the way.
+      let pos = target;
+      let tilt = 0;
+      if (jump) {
+        const u = (now - jump.start) / jump.duration;
+        if (u >= 1) {
+          jump = null;
+        } else {
+          const e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+          pos = {
+            x: jump.from.x + (target.x - jump.from.x) * e,
+            y: jump.from.y + (target.y - jump.from.y) * e - jump.height * 4 * u * (1 - u),
+          };
+          // Nose up going up, down coming down.
+          const climb = jump.height * 4 * (1 - 2 * u) + (jump.from.y - target.y);
+          const run = Math.abs(target.x - jump.from.x) + 1;
+          tilt = Math.max(-18, Math.min(18, (Math.atan2(climb, run) * 180) / Math.PI)) * (facing > 0 ? 1 : -1);
+        }
+      }
+      at = pos;
+
+      // On the screen.
+      const sx = pos.x * view.zoom + view.x;
+      const sy = pos.y * view.zoom + view.y;
+      const left = Math.round((sx - width / 2) * dpr) / dpr;
+      const top = Math.round((sy - EDGE * scale) * dpr) / dpr;
+
+      // What it sees: the pointer, from its head, in its pixels.
+      if (pointer) {
+        const hx = pos.x + (HEAD.x - WIDTH / 2) * unit * facing;
+        const hy = pos.y + (HEAD.y - EDGE) * unit;
+        b.see(now, { x: ((pointer.x - hx) / unit) * facing, y: (pointer.y - hy) / unit });
+      } else {
+        b.see(now, null);
+      }
+      if (hovered.current !== null) {
+        b.hover(now, hovered.current);
+        hovered.current = null;
+      }
+      if (petted.current) {
+        petted.current = false;
+        b.pet(now);
+        spawn('heart');
+      }
+
+      const pose = b.pose(now);
+      const mood = b.mood(now);
+      if (mood === 'asleep' && now >= nextZ && !still.matches) {
+        spawn('z');
+        nextZ = now + 1700;
+      }
+
+      setShown(true);
+      setPx(scale);
+      setMirror(facing < 0);
+      const el = box.current;
+      const cv = canvas.current;
+      if (el && cv) {
+        const p = `${left},${top},${tilt}`;
+        if (p !== place) {
+          el.style.transform = `translate(${left}px, ${top}px)`;
+          cv.style.rotate = tilt ? `${tilt}deg` : '';
+          place = p;
+        }
+        const k = `${kind}${coat}${device}${key(pose)}`;
+        if (k !== drawn) {
+          cv.width = WIDTH * device;
+          cv.height = HEIGHT * device;
+          const ctx = cv.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            draw(ctx, render(kind, coat, pose), coat, device);
+          }
+          drawn = k;
+        }
+      }
+      // The part above the edge takes clicks; the paws leave the header to
+      // the window. None while it's in the air.
+      const a = jump ? '' : `${left},${top},${width},${EDGE * scale}`;
+      if (a !== areas) {
+        host.overlay.setHitAreas(jump ? [] : [{ x: left, y: top, width, height: EDGE * scale }]);
+        areas = a;
+      }
+
+      if (jump) frame = requestAnimationFrame(tick);
+      else timer = setTimeout(tick, mood === 'asleep' ? 250 : mood === 'happy' ? 50 : 80);
+    };
+
+    const offView = host.on('view', (v: CanvasView) => {
+      view = v;
+      tick();
+    });
+    const offActive = host.on('active', (a: CanvasActive | null) => {
+      active = a;
+      tick();
+    });
+    const offPointer = host.on('pointer', (p: Point | null) => {
+      pointer = p;
+    });
+    const nudge = () => tick();
+    addEventListener('pet:nudge', nudge);
+    tick();
     return () => {
       offView();
       offActive();
+      offPointer();
+      removeEventListener('pet:nudge', nudge);
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      host.overlay.setHitAreas([]);
     };
   }, [host]);
 
-  // Whole device pixels a cat pixel, so it stays crisp at any zoom.
-  const dpr = window.devicePixelRatio || 1;
-  const device = Math.max(1, Math.round((SIZES[size] ?? SIZES.medium) * view.zoom * dpr));
-  const px = device / dpr;
-  const width = WIDTH * px;
-  const at = active ? host.canvas.toScreen({ x: active.x + active.width / 2, y: active.y }) : null;
-  // Only on a window wider than the cat.
-  const shown = !!active && !!at && active.width * view.zoom >= width * 1.2;
-  const left = at ? Math.round((at.x - width / 2) * dpr) / dpr : 0;
-  const top = at ? Math.round((at.y - EDGE * px) * dpr) / dpr : 0;
-
-  useLayoutEffect(() => {
-    const el = canvas.current;
-    if (!el || !shown) return;
-    el.width = WIDTH * device;
-    el.height = HEIGHT * device;
-    const ctx = el.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, el.width, el.height);
-    draw(ctx, pose, COATS[coat] ?? COATS.ginger, device);
-  }, [shown, device, pose, coat]);
-
-  // The cat above the edge takes clicks; the paws leave the header alone.
+  // A setting changed: draw it now.
   useEffect(() => {
-    host.overlay.setHitAreas(shown ? [{ x: left, y: top, width, height: EDGE * px }] : []);
-  }, [host, shown, left, top, width, px]);
+    dispatchEvent(new Event('pet:nudge'));
+  }, [kind, coat, size]);
 
-  if (!shown) return null;
-  const pet = () => {
-    const id = Date.now() + Math.random();
-    setHearts((h) => [...h.slice(-4), id]);
-    setTimeout(() => setHearts((h) => h.filter((x) => x !== id)), 1200);
-  };
+  const width = WIDTH * px;
+  // The face, flipped with the pet.
+  const face = (mirror ? WIDTH - FACE.x : FACE.x) * px;
   return (
-    <div style={{ position: 'absolute', left, top, width, height: HEIGHT * px }}>
-      <canvas ref={canvas} onPointerDown={pet} style={{ width, height: HEIGHT * px, imageRendering: 'pixelated', cursor: 'pointer', display: 'block' }} />
-      {hearts.map((id) => (
-        <span key={id} className="pet-heart" style={{ left: FACE.x * px, top: FACE.y * px, fontSize: Math.max(10, 6 * px) }}>
-          ♥
-        </span>
+    <div ref={box} style={{ position: 'absolute', left: 0, top: 0, width, height: HEIGHT * px, display: shown ? 'block' : 'none' }}>
+      <canvas
+        ref={canvas}
+        onPointerDown={() => {
+          petted.current = true;
+          dispatchEvent(new Event('pet:nudge'));
+        }}
+        onPointerEnter={() => {
+          hovered.current = true;
+        }}
+        onPointerLeave={() => {
+          hovered.current = false;
+        }}
+        style={{
+          width,
+          height: HEIGHT * px,
+          imageRendering: 'pixelated',
+          cursor: 'pointer',
+          display: 'block',
+          scale: mirror ? '-1 1' : undefined,
+          transformOrigin: `50% ${(EDGE / HEIGHT) * 100}%`,
+        }}
+      />
+      {bits.map((b) => (
+        <Pixels
+          key={b.id}
+          className={b.kind === 'heart' ? 'pet-heart' : 'pet-z'}
+          art={b.kind === 'heart' ? HEART : ZED}
+          px={Math.max(1, px * (b.kind === 'heart' ? 1 : 0.8))}
+          style={{ left: face + b.x * px, top: (FACE.y - 2) * px, fontSize: 6 * px, ['--drift' as string]: `${b.drift * (mirror ? -1 : 1) * 10 * px}px` }}
+        />
       ))}
     </div>
   );
 }
 
-/** The tail swishes now and then; the eyes blink every few seconds. */
-function usePose(): Pose {
-  const [pose, setPose] = useState<Pose>({ tail: 'up', blink: false });
-  useEffect(() => {
-    let timer = 0;
-    let swishes = 0;
-    let nextBlink = Date.now() + 2000;
-    const tick = () => {
-      const now = Date.now();
-      if (now >= nextBlink) {
-        setPose((p) => ({ ...p, blink: true }));
-        nextBlink = now + 2500 + Math.random() * 4000;
-        timer = window.setTimeout(() => {
-          setPose((p) => ({ ...p, blink: false }));
-          timer = window.setTimeout(tick, 200);
-        }, 160);
-        return;
-      }
-      if (swishes > 0) {
-        swishes--;
-        setPose((p) => ({ ...p, tail: p.tail === 'up' ? 'swish' : 'up' }));
-        timer = window.setTimeout(tick, 220);
-        return;
-      }
-      setPose((p) => ({ ...p, tail: 'up' }));
-      if (Math.random() < 0.25) swishes = 4;
-      timer = window.setTimeout(tick, 900);
-    };
-    timer = window.setTimeout(tick, 600);
-    return () => clearTimeout(timer);
-  }, []);
-  return pose;
+const HEART = { rows: ['.11.11.', '1211111', '1111111', '.11111.', '..111..', '...1...'], colors: { 1: '#ff5f80', 2: '#ffd0da' } };
+const ZED = { rows: ['1111', '..1.', '.1..', '1111'], colors: { 1: 'rgba(225,232,255,0.9)' } };
+
+/** A little pixel picture: a heart, a z. */
+function Pixels({
+  art,
+  px,
+  className,
+  style,
+}: {
+  art: { rows: string[]; colors: Record<string, string> };
+  px: number;
+  className: string;
+  style: CSSProperties;
+}) {
+  const w = art.rows[0].length;
+  const h = art.rows.length;
+  return (
+    <svg className={className} width={w * px} height={h * px} viewBox={`0 0 ${w} ${h}`} shapeRendering="crispEdges" style={style} aria-hidden>
+      {art.rows.flatMap((row, y) =>
+        [...row].map((c, x) => (c in art.colors ? <rect key={`${x},${y}`} x={x} y={y} width={1} height={1} fill={art.colors[c]} /> : null)),
+      )}
+    </svg>
+  );
 }

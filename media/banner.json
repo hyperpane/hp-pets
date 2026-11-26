@@ -1,7 +1,7 @@
 {
   "accent": "#f778ba",
-  "tagline": "A pixel cat that naps on the window you're working in.",
-  "chips": ["Pixel art", "Four coats", "Follows focus"],
+  "tagline": "A pixel pet that naps on the window you're working in.",
+  "chips": ["Cat, fox, pup, bunny", "Follows focus", "Pet it"],
   "window": "my-app",
   "illustration": "illustration.svg"
 }
