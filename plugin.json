@@ -2,7 +2,7 @@
   "manifest": 1,
   "id": "pets",
   "name": "Pets",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "hyperpane",
   "description": "A little pixel pet (a cat, a fox, a pup or a bunny) that naps on the header of the window you're working in and leaps to the next one. It watches your pointer, purrs when you pet it, and dozes off when you leave it be.",
   "icon": "icon.svg",

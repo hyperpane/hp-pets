@@ -76,9 +76,11 @@ export function Pet({ host }: { host: Host }) {
       if (!b) return;
       const unit = SIZES[size] ?? SIZES.medium;
       const dpr = globalThis.devicePixelRatio || 1;
-      // Whole device pixels a pet pixel, so it stays crisp at any zoom.
-      const device = Math.max(1, Math.round(unit * view.zoom * dpr));
-      const scale = device / dpr;
+      // Screen pixels a pet pixel: exactly the canvas's zoom, so it keeps its
+      // size next to its window as you zoom. It's drawn at whole device
+      // pixels a pet pixel, the next size up, and shown at this size.
+      const scale = unit * view.zoom;
+      const device = Math.max(1, Math.ceil(scale * dpr - 0.01));
       const width = WIDTH * scale;
 
       if (!active || active.width * view.zoom < width * 1.1) {
