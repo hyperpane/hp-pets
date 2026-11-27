@@ -57,6 +57,14 @@ export function Pet({ host }: { host: Host }) {
     let frame = 0;
     let nextZ = 0;
     let bitId = 0;
+    // What React was last told: it's told again only when one changes.
+    let told = { shown: false, px: 1, mirror: false };
+    const tell = (shown: boolean, px: number, mirror: boolean) => {
+      if (shown !== told.shown) setShown(shown);
+      if (px !== told.px) setPx(px);
+      if (mirror !== told.mirror) setMirror(mirror);
+      told = { shown, px, mirror };
+    };
     const still = matchMedia('(prefers-reduced-motion: reduce)');
 
     const spawn = (kind: Bit['kind']) => {
@@ -88,7 +96,7 @@ export function Pet({ host }: { host: Host }) {
         at = null;
         sitting = null;
         jump = null;
-        setShown(false);
+        tell(false, told.px, told.mirror);
         if (areas !== '') host.overlay.setHitAreas([]);
         areas = '';
         return;
@@ -166,9 +174,7 @@ export function Pet({ host }: { host: Host }) {
         nextZ = now + 1700;
       }
 
-      setShown(true);
-      setPx(scale);
-      setMirror(facing < 0);
+      tell(true, scale, facing < 0);
       const el = box.current;
       const cv = canvas.current;
       if (el && cv) {
@@ -198,8 +204,12 @@ export function Pet({ host }: { host: Host }) {
         areas = a;
       }
 
+      // A hidden page: nothing to draw until it's back (visibilitychange).
+      if (document.hidden) return;
+      // As often as its pose can change: a wag is quick, a blink 140 ms,
+      // a sleeping tail barely moves.
       if (jump) frame = requestAnimationFrame(tick);
-      else timer = setTimeout(tick, mood === 'asleep' ? 250 : mood === 'happy' ? 50 : 80);
+      else timer = setTimeout(tick, mood === 'asleep' ? 500 : mood === 'happy' ? 50 : 100);
     };
 
     const offView = host.on('view', (v: CanvasView) => {
@@ -215,12 +225,14 @@ export function Pet({ host }: { host: Host }) {
     });
     const nudge = () => tick();
     addEventListener('pet:nudge', nudge);
+    document.addEventListener('visibilitychange', nudge);
     tick();
     return () => {
       offView();
       offActive();
       offPointer();
       removeEventListener('pet:nudge', nudge);
+      document.removeEventListener('visibilitychange', nudge);
       clearTimeout(timer);
       cancelAnimationFrame(frame);
       host.overlay.setHitAreas([]);
